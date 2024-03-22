@@ -1,22 +1,17 @@
 #importing libraries
 import pandas as pd
 import numpy as np
-import sklearn as sk
-from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 from sklearn.utils import resample
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
 import warnings
-from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn import preprocessing
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.feature_selection import SelectFromModel
 from sklearn.ensemble import RandomForestClassifier as rf
 import itertools
-from sklearn.tree import DecisionTreeClassifier
-import xgboost as xgb
 import matplotlib.gridspec as gridspec
 from mlxtend.classifier import EnsembleVoteClassifier
 from mlxtend.plotting import plot_decision_regions

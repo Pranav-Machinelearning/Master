@@ -14,10 +14,10 @@ from sklearn import preprocessing
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.feature_selection import SelectFromModel
 from sklearn.ensemble import RandomForestClassifier as rf
-import matplotlib.gridspec as gridspec
 import itertools
 from sklearn.tree import DecisionTreeClassifier
 import xgboost as xgb
+import matplotlib.gridspec as gridspec
 from mlxtend.classifier import EnsembleVoteClassifier
 from mlxtend.plotting import plot_decision_regions
 
@@ -93,7 +93,7 @@ label_Encoders = {}
 # Iterate over columns with object dtype and encode them
 for col in over_sampled.select_dtypes(include=['object']).columns:
     label_Encoders[col] = LabelEncoder()
-    # Fit and transform the column using the LabelEncoder
+    # Fit and transform the column
     over_sampled[col] = label_Encoders[col].fit_transform(over_sampled[col])
 
 warnings.filterwarnings("ignore")
@@ -145,7 +145,7 @@ print(rf(n_estimators=100, random_state=0).fit(X,y).feature_importances_)
 
 
 
-features = MiceImputed[['Location', 'MinTemp', 'MaxTemp', 'Rainfall', 'Evaporation', 'Sunshine', 'WindGustDir',
+column_features = MiceImputed[['Location', 'MinTemp', 'MaxTemp', 'Rainfall', 'Evaporation', 'Sunshine', 'WindGustDir',
                        'WindGustSpeed', 'WindDir9am', 'WindDir3pm', 'WindSpeed9am', 'WindSpeed3pm', 'Humidity9am',
                        'Humidity3pm', 'Pressure9am', 'Pressure3pm', 'Cloud9am', 'Cloud3pm', 'Temp9am', 'Temp3pm',
                        'RainToday']]
@@ -153,7 +153,7 @@ target = MiceImputed['RainTomorrow']
 
 # Split into test and train
 from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42,
+X_train, X_test, y_train, y_test = train_test_split(column_features, target, test_size=0.2, random_state=42,
                                                     shuffle=True, stratify=target)
 
 # Normalize Features
@@ -197,11 +197,11 @@ def plot_model(model, X_train, y_train, X_test, y_test, verbose=True):
     probs = model.predict_proba(X_test)
     probs = probs[:, 1]
     false_p, true_p, thresholds = roc_curve(y_test, probs)
-    plot_roc_cur(false_p, true_p)
+    roc_cur(false_p, true_p)
 
-    plot_confusion_matrix(model, X_test, y_test, cmap=plt.cm.Blues, normalize='all')
+    # plot_confusion_matrix(model, X_test, y_test, cmap=plt.cm.Blues, normalize='all')
 
-    return model, accuracy, roc_auc, coh_kap, time_taken
+    return model, accuracy, roc_auc, coh_kap, tt
 
 
 # Decision Tree
@@ -211,7 +211,7 @@ params_dt = {'max_depth': 18,
              'max_features': "sqrt"}
 
 model_dt = DecisionTreeClassifier(**params_dt)
-model_dt, accuracy_dt, roc_auc_dt, coh_kap_dt, tt_dt = run_model(model_dt, X_train, y_train, X_test, y_test)
+model_dt, accuracy_dt, roc_auc_dt, coh_kap_dt, tt_dt = plot_model(model_dt, X_train, y_train, X_test, y_test)
 
 
 # Random Forest
@@ -224,7 +224,7 @@ params_rf = {'max_depth': 18,
              'random_state': 43}
 
 model_rf = RandomForestClassifier(**params_rf)
-model_rf, accuracy_rf, roc_auc_rf, coh_kap_rf, tt_rf = run_model(model_rf, X_train, y_train, X_test, y_test)
+model_rf, accuracy_rf, roc_auc_rf, coh_kap_rf, tt_rf = plot_model(model_rf, X_train, y_train, X_test, y_test)
 
 
 # XGBoost
@@ -233,7 +233,7 @@ params_xgb ={'n_estimators': 500,
             'max_depth': 16}
 
 model_xgb = xgb.XGBClassifier(**params_xgb)
-model_xgb, accuracy_xgb, roc_auc_xgb, coh_kap_xgb, tt_xgb = run_model(model_xgb, X_train, y_train, X_test, y_test)
+model_xgb, accuracy_xgb, roc_auc_xgb, coh_kap_xgb, tt_xgb = plot_model(model_xgb, X_train, y_train, X_test, y_test)
 
 
 value = 1.90
@@ -245,7 +245,7 @@ Alg2 = RandomForestClassifier(random_state=42)
 Alg3 = xgb.XGBClassifier(random_state=42)
 EVC = EnsembleVoteClassifier(clfs=[Alg1, Alg2, Alg3], weights=[1, 1, 1], voting='soft')
 
-X_feature = MiceImputed[["Sunshine", "Humidity9am", "Cloud3pm"]] #took only really important features
+X_feature = MiceImputed[["Sunshine", "Humidity9am", "Cloud3pm"]]
 X = np.asarray(X_feature, dtype=np.float32)
 y_feature = MiceImputed["RainTomorrow"]
 y = np.asarray(y_feature, dtype=np.int32)
@@ -308,7 +308,7 @@ ax1.tick_params(axis='y')
 ax2 = ax1.twinx()
 color = 'tab:red'
 ax2.set_ylabel('Accuracy', fontsize=13, color=color)
-ax2 = sns.lineplot(x='Model', y='Accuracy', data = data, sort=False, color=color)
+ax2 = sns.lineplot(x='Model', y='Accuracy', data = data, color=color)
 ax2.tick_params(axis='y', color=color)
 
 figure, ax3 = plt.subplots(figsize=(14,12))
@@ -322,6 +322,6 @@ ax3.tick_params(axis='y')
 ax4 = ax3.twinx()
 color = 'tab:red'
 ax4.set_ylabel('Cohen_Kappa', fontsize=13, color=color)
-ax4 = sns.lineplot(x='Model', y='Cohen_Kappa', data = data, sort=False, color=color)
+ax4 = sns.lineplot(x='Model', y='Cohen_Kappa', data = data, color=color)
 ax4.tick_params(axis='y', color=color)
 plt.show()

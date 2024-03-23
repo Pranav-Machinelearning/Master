@@ -12,49 +12,55 @@ from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.feature_selection import SelectFromModel
 from sklearn.ensemble import RandomForestClassifier as rf
 import itertools
+from sklearn.model_selection import train_test_split
 import matplotlib.gridspec as gridspec
+from sklearn.preprocessing import StandardScaler
 from mlxtend.classifier import EnsembleVoteClassifier
 from mlxtend.plotting import plot_decision_regions
+from sklearn.tree import DecisionTreeClassifier
+import xgboost as xgb
+from sklearn.ensemble import RandomForestClassifier
 
 
 # Get data from data set
-weather_data = pd.read_csv('C:\\Users\\prana\\PycharmProjects\\Data science project\\weatherAUS.csv')
-print(weather_data.head(20))
+weather = pd.read_csv('C:\\Users\\prana\\PycharmProjects\\Data science project\\weatherAUS.csv')
+print(weather.head(20))
 # print(weather_data.shape)
-print(weather_data.info())
+print(weather.info())
 
 #Both "RainToday" and "RainTomorrow" are categorical variables indicating whether it will rain or not (Yes/No).
 #We'll convert them into binary values (1/0) for ease of analysis.
 
-weather_data['RainToday'] = weather_data['RainToday'].map({'No': 0, 'Yes': 1})
-weather_data['RainTomorrow'] = weather_data['RainTomorrow'].map({'No': 0, 'Yes': 1})
+weather['RainToday'] = weather['RainToday'].map({'No': 0, 'Yes': 1})
+weather['RainTomorrow'] = weather['RainTomorrow'].map({'No': 0, 'Yes': 1})
 
-print(weather_data.head(20))
+print(weather.head(20))
 
 #Next, we will check whether the dataset is imbalanced or balanced.
 #If the dataset is imbalanced, we need to undersample majority or oversample minority to balance it.
 
 figure = plt.figure(figsize = (12,10))
-weather_data.RainTomorrow.value_counts(normalize = True).plot(kind='bar', color= ['#a4c639','#5d8aa8'], alpha = 0.9, rot=0)
+weather.RainTomorrow.value_counts(normalize = True).plot(kind='bar', color= ['#a4c639','#5d8aa8'], alpha = 0.9, rot=0)
 plt.title('RainTomorrow: Unbalanced Dataset with No(0) and Yes(1) Indicators')
 plt.show()
 
 # Handling Class Imbalance
 # Separate data based on RainTomorrow value
-no_rain = weather_data[weather_data['RainTomorrow'] == 0]
-yes_rain = weather_data[weather_data['RainTomorrow'] == 1]
+no_r = weather[weather['RainTomorrow'] == 0]
+yes_r = weather[weather['RainTomorrow'] == 1]
 
 # Oversample the minority class ('yes') to balance the dataset
-yes_oversampled = resample(yes_rain, replace=True, n_samples=len(no_rain), random_state=123)
+Over = resample(yes_r, replace=True, n_samples=len(no_r), random_state=123)
 
 # Concatenate the oversampled 'yes' data with the 'no' data
-over_sampled = pd.concat([no_rain, yes_oversampled])
+over_sampled = pd.concat([no_r, Over])
 
 #Plotting
-fig = plt.figure(figsize = (12,10))
-over_sampled.RainTomorrow.value_counts(normalize = True).plot(kind='bar', color= ['#a4c639','#5d8aa8'], alpha = 0.9, rot=0)
-plt.title('After oversampling, RainTomorrow Indicator No(0) and Yes(1) (Balanced Dataset)')
+plt_figure = plt.figure(figsize = (12,10))
+over_sampled.RainTomorrow.value_counts(normalize = True).plot(kind='bar', color= ['#a4c639','#5d8aa8'], alpha = 1.0, rot=0)
+plt.title(' Balanced dataset After oversampling, RainTomorrow shows No(0) and Yes(1)')
 plt.show()
+
 
 # Check Missing Data Pattern in Training Data
 sns.heatmap(over_sampled.isnull(), cbar=False, cmap='PuBu')
@@ -66,9 +72,9 @@ total_missing = over_sampled.isnull().sum().sort_values(ascending=False)
 #Calculate percentage of missing values
 percent_missing = (over_sampled.isnull().sum() / len(over_sampled)).sort_values(ascending=False)
 #Concatenate total and percentage missing values into a weather_data
-missing_data_summary = pd.concat([total_missing, percent_missing], axis=1, keys=['Total', 'Percent'])
+summary = pd.concat([total_missing, percent_missing], axis=1, keys=['Total Missing', 'Percent Missing'])
 # Display the first 10 rows of the missing data summary
-missing_data_summary.head(10)
+summary.head(10)
 
 
 # Impute categorical variable 'Location' with its mode
@@ -86,76 +92,80 @@ over_sampled['WindDir3pm'] = over_sampled['WindDir3pm'].fillna(over_sampled['Win
 #dictionary
 label_Encoders = {}
 # Iterate over columns with object dtype and encode them
-for col in over_sampled.select_dtypes(include=['object']).columns:
-    label_Encoders[col] = LabelEncoder()
+for column in over_sampled.select_dtypes(include=['object']).columns:
+    label_Encoders[column] = LabelEncoder()
     # Fit and transform the column
-    over_sampled[col] = label_Encoders[col].fit_transform(over_sampled[col])
+    over_sampled[column] = label_Encoders[column].fit_transform(over_sampled[column])
 
 warnings.filterwarnings("ignore")
-MiceImputed = over_sampled.copy(deep=True)
-mice_imputer = IterativeImputer()
-MiceImputed.iloc[:, :] = mice_imputer.fit_transform(over_sampled)
+Mice_Sample = over_sampled.copy(deep=True)
+M_Imputer = IterativeImputer()
+Mice_Sample.iloc[:, :] = M_Imputer.fit_transform(over_sampled)
 
 # Detecting outliers with IQR
-Mice1 = MiceImputed.quantile(0.25)
-Mice2 = MiceImputed.quantile(0.75)
+Mice1 = Mice_Sample.quantile(0.25)
+Mice2 = Mice_Sample.quantile(0.75)
 Mice3 = Mice2 - Mice1
 print(Mice3)
 
-corr = MiceImputed.corr()
-mask = np.triu(np.ones_like(corr))
-f, ax = plt.subplots(figsize=(20, 20))
-cmap = sns.diverging_palette(250, 25, as_cmap=True)
-sns.heatmap(corr, mask=mask, cmap=cmap, vmax=None, center=0,square=True, annot=True, linewidths=.5, cbar_kws={"shrink": .9})
+# Mice_Sample = Mice_Sample[~((Mice_Sample < (Q1 - 1.5 * IQR)) |(Mice_Sample > (Q3 + 1.5 * IQR))).any(axis=1)]
+# Mice_Sample.shape
 
-sns.pairplot(data=MiceImputed, vars=('MaxTemp','MinTemp','Pressure9am','Pressure3pm'), hue='RainTomorrow')
+
+cr = Mice_Sample.corr()
+mk = np.triu(np.ones_like(cr))
+z, x = plt.subplots(figsize=(20, 20))
+map = sns.diverging_palette(250, 25, as_cmap=True)
+sns.heatmap(cr, mask=mk, cmap=map, vmax=None, center=0, square=True, annot=True, linewidths=.6, cbar_kws={"shrink": 0.9})
 plt.show()
 
-sns.pairplot( data=MiceImputed, vars=('Temp9am', 'Temp3pm', 'Evaporation'), hue='RainTomorrow' )
+sns.pairplot(data=Mice_Sample, vars=('MaxTemp', 'MinTemp', 'Pressure9am', 'Pressure3pm'), hue='RainTomorrow')
+plt.show()
+
+sns.pairplot(data=Mice_Sample, vars=('Temp9am', 'Temp3pm', 'Evaporation'), hue='RainTomorrow')
 plt.show()
 
 # Standardizing data
-MinMax_scaler = preprocessing.MinMaxScaler()
-MinMax_scaler.fit(MiceImputed)
-New_data = pd.DataFrame(MinMax_scaler.transform(MiceImputed), index=MiceImputed.index, columns=MiceImputed.columns)
-print(New_data.head(10))
+MinMax = preprocessing.MinMaxScaler()
+MinMax.fit(Mice_Sample)
+New = pd.DataFrame(MinMax.transform(Mice_Sample), index=Mice_Sample.index, columns=Mice_Sample.columns)
+print(New.head(10))
 
 # Feature Importance using Filter Method (Chi-Square)
-X = New_data.loc[:,New_data.columns!='RainTomorrow']
-y = New_data[['RainTomorrow']]
+fitx = New.loc[:, New.columns != 'RainTomorrow']
+fity = New[['RainTomorrow']]
 K = SelectKBest(chi2, k=10)
-K.fit(X, y)
-K_new = K.transform(X)
-print(X.columns[K.get_support(indices=True)])
+K.fit(fitx, fity)
+K2 = K.transform(fitx)
+print(fitx.columns[K.get_support(indices=True)])
 
 
-X = MiceImputed.drop('RainTomorrow', axis=1)
-y = MiceImputed['RainTomorrow']
+fx = Mice_Sample.drop('RainTomorrow', axis=1)
+fy = Mice_Sample['RainTomorrow']
 model = SelectFromModel(rf(n_estimators=100, random_state=0))
-model.fit(X, y)
-support_model = model.get_support()
-model_features = X.loc[:,support_model].columns.tolist()
-print(model_features)
-print(rf(n_estimators=100, random_state=0).fit(X,y).feature_importances_)
+model.fit(fx, fy)
+Demo_model = model.get_support()
+fm = fx.loc[:, Demo_model].columns.tolist()
+print(fm)
+print(rf(n_estimators=100, random_state=0).fit(fx, fy).feature_importances_)
 
 
 
-column_features = MiceImputed[['Location', 'MinTemp', 'MaxTemp', 'Rainfall', 'Evaporation', 'Sunshine', 'WindGustDir',
-                       'WindGustSpeed', 'WindDir9am', 'WindDir3pm', 'WindSpeed9am', 'WindSpeed3pm', 'Humidity9am',
-                       'Humidity3pm', 'Pressure9am', 'Pressure3pm', 'Cloud9am', 'Cloud3pm', 'Temp9am', 'Temp3pm',
-                       'RainToday']]
-target = MiceImputed['RainTomorrow']
+column_f = Mice_Sample[['MinTemp', 'MaxTemp', 'Rainfall', 'Evaporation', 'Sunshine', 'WindGustDir',
+                       'WindGustSpeed', 'WindDir9am', 'WindSpeed9am', 'WindSpeed3pm', 'Humidity9am',
+                       'Humidity3pm', 'Pressure9am', 'Pressure3pm', 'Cloud3pm', 'Temp9am', 'Temp3pm',
+                       'RainToday', 'Location', 'WindDir3pm', 'Cloud9am']]
+
+ft = Mice_Sample['RainTomorrow']
 
 # Split into test and train
-from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(column_features, target, test_size=0.2, random_state=42,
-                                                    shuffle=True, stratify=target)
+f_train, f_test, g_train, g_test = train_test_split(column_f, ft, test_size=0.2, random_state=42,
+                                                    shuffle=True, stratify=ft)
 
 # Normalize Features
-from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.fit_transform(X_test)
+f_train = scaler.fit_transform(f_train)
+f_test = scaler.fit_transform(f_test)
 
 
 def roc_cur(false_p, true_per):
@@ -172,63 +182,58 @@ import time
 from sklearn.metrics import accuracy_score, roc_auc_score, cohen_kappa_score, roc_curve, classification_report
 
 
-def plot_model(model, X_train, y_train, X_test, y_test, verbose=True):
+def plot_model(xmodel, n_train, s_train, n_test, s_test, verbose=True):
     t_t = time.time()
     if verbose == False:
-        model.fit(X_train, y_train, verbose=0)
+        xmodel.fit(n_train, s_train, verbose=0)
     else:
-        model.fit(X_train, y_train)
-    n_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, n_pred)
-    roc_auc = roc_auc_score(y_test, n_pred)
-    coh_kap = cohen_kappa_score(y_test, n_pred)
+        xmodel.fit(n_train, s_train)
+    n_pred = xmodel.predict(n_test)
+    accuracy = accuracy_score(s_test, n_pred)
+    roc_auc = roc_auc_score(s_test, n_pred)
+    coh_kap = cohen_kappa_score(s_test, n_pred)
     tt = time.time() - t_t
     print("Accuracy = {}".format(accuracy))
     print("ROC Area under Curve = {}".format(roc_auc))
     print("Cohen's Kappa = {}".format(coh_kap))
     print("Time taken = {}".format(tt))
-    print(classification_report(y_test, n_pred, digits=5))
+    print(classification_report(s_test, n_pred, digits=5))
 
-    probs = model.predict_proba(X_test)
+    probs = xmodel.predict_proba(n_test)
     probs = probs[:, 1]
-    false_p, true_p, thresholds = roc_curve(y_test, probs)
+    false_p, true_p, thresholds = roc_curve(s_test, probs)
     roc_cur(false_p, true_p)
 
-    # plot_confusion_matrix(model, X_test, y_test, cmap=plt.cm.Blues, normalize='all')
-
-    return model, accuracy, roc_auc, coh_kap, tt
+    return xmodel, accuracy, roc_auc, coh_kap, tt
 
 
 # Decision Tree
-from sklearn.tree import DecisionTreeClassifier
 
-params_dt = {'max_depth': 18,
+params_dec = {'max_depth': 18,
              'max_features': "sqrt"}
 
-model_dt = DecisionTreeClassifier(**params_dt)
-model_dt, accuracy_dt, roc_auc_dt, coh_kap_dt, tt_dt = plot_model(model_dt, X_train, y_train, X_test, y_test)
+dec_model = DecisionTreeClassifier(**params_dec)
+dec_model, accuracy_decision_tree, roc_auc_decision_tree, coh_kap_decision_tree, tt_dt = plot_model(dec_model, f_train, g_train, f_test, g_test)
 
 
 # Random Forest
-from sklearn.ensemble import RandomForestClassifier
 
-params_rf = {'max_depth': 18,
+params_random_forest = {'max_depth': 18,
              'min_samples_leaf': 1,
              'min_samples_split': 2,
              'n_estimators': 100,
              'random_state': 43}
 
-model_rf = RandomForestClassifier(**params_rf)
-model_rf, accuracy_rf, roc_auc_rf, coh_kap_rf, tt_rf = plot_model(model_rf, X_train, y_train, X_test, y_test)
+Random_model = RandomForestClassifier(**params_random_forest)
+Random_model, accuracy_random_forest, roc_auc_random_forest, coh_kap_random_forest, tt_rf = plot_model(Random_model, f_train, g_train, f_test, g_test)
 
 
 # XGBoost
-import xgboost as xgb
-params_xgb ={'n_estimators': 500,
+params_xgboost ={'n_estimators': 500,
             'max_depth': 16}
 
-model_xgb = xgb.XGBClassifier(**params_xgb)
-model_xgb, accuracy_xgb, roc_auc_xgb, coh_kap_xgb, tt_xgb = plot_model(model_xgb, X_train, y_train, X_test, y_test)
+xgboost_model = xgb.XGBClassifier(**params_xgboost)
+xgboost_model, accuracy_xgboost, roc_auc_xgboost, coh_kap_xgboost, tt_xgb = plot_model(xgboost_model, f_train, g_train, f_test, g_test)
 
 
 value = 1.90
@@ -240,83 +245,83 @@ Alg2 = RandomForestClassifier(random_state=42)
 Alg3 = xgb.XGBClassifier(random_state=42)
 EVC = EnsembleVoteClassifier(clfs=[Alg1, Alg2, Alg3], weights=[1, 1, 1], voting='soft')
 
-X_feature = MiceImputed[["Sunshine", "Humidity9am", "Cloud3pm"]]
-X = np.asarray(X_feature, dtype=np.float32)
-y_feature = MiceImputed["RainTomorrow"]
-y = np.asarray(y_feature, dtype=np.int32)
+n_feature = Mice_Sample[["Sunshine", "Humidity9am", "Cloud3pm"]]
+fx = np.asarray(n_feature, dtype=np.float32)
+s_feature = Mice_Sample["RainTomorrow"]
+fy = np.asarray(s_feature, dtype=np.int32)
 
 # Plotting Decision Regions
-gd = gridspec.GridSpec(3,3)
+gd = gridspec.GridSpec(4,4)
 fig = plt.figure(figsize=(18, 14))
 
-labels = ['Decision Tree',
+Model_labels = ['Decision Tree',
           'Random Forest',
           'XGBoost',
           'Ensemble']
 
-for Alg, lab, grd in zip([Alg1, Alg2, Alg3, EVC],
-                         labels,
-                         itertools.product([0, 1, 2],
+for Alg, lb, zx in zip([Alg1, Alg2, Alg3, EVC],
+                       Model_labels,
+                       itertools.product([0, 1, 2],
                          repeat=2)):
-    Alg.fit(X, y)
-    axis = plt.subplot(gd[grd[0], grd[1]])
-    fig = plot_decision_regions(X=X, y=y, clf=Alg,
+    Alg.fit(fx, fy)
+    axis = plt.subplot(gd[zx[0], zx[1]])
+    fig = plot_decision_regions(X=fx, y=fy, clf=Alg,
                                 filler_feature_values={2: value},
                                 filler_feature_ranges={2: width},
                                 legend=2)
-    plt.title(lab)
+    plt.title(lb)
 
 plt.show()
 
-accuracy_dt = 0.8782151517211685
-roc_auc_dt = 0.878215560452389
-coh_kap_dt = 0.7564305024566328
-TT_dt = 1.7221224308013916
-accuracy_rf = 0.9427787975615836
-roc_auc_rf = 0.9427794523212041
-coh_kap_rf = 0.8855577449354552
-TT_rf = 134.64815497398376
-accuracy_xgb = 0.9436626101933057
-roc_auc_xgb = 0.9436632603313401
-coh_kap_xgb = 0.8873253668433951
-TT_xgb = 55.581029176712036
+accuracy_decision_tree = 0.8782151517211685
+roc_auc_decision_tree = 0.878215560452389
+coh_kap_decision_tree = 0.7564305024566328
+time_taken_decision_tree = 1.7221224308013916
+accuracy_random_forest = 0.9427787975615836
+roc_auc_random_forest = 0.9427794523212041
+coh_kap_random_forest = 0.8855577449354552
+time_taken_random_forest = 134.64815497398376
+accuracy_xgboost = 0.9436626101933057
+roc_auc_xgboost = 0.9436632603313401
+coh_kap_xgboost = 0.8873253668433951
+time_taken_xgboost = 55.581029176712036
 
-accuracy_scores = [accuracy_dt, accuracy_rf, accuracy_xgb]
-roc_scores = [roc_auc_dt, roc_auc_rf, roc_auc_xgb]
-coh_scores = [coh_kap_dt, coh_kap_rf, coh_kap_xgb]
-time_taken = [TT_dt, TT_rf, TT_xgb]
+accuracy_scores = [accuracy_decision_tree, accuracy_random_forest, accuracy_xgboost]
+roc_scores = [roc_auc_decision_tree, roc_auc_random_forest, roc_auc_xgboost]
+coh_scores = [coh_kap_decision_tree, coh_kap_random_forest, coh_kap_xgboost]
+time_taken = [time_taken_decision_tree, time_taken_random_forest, time_taken_xgboost]
 
-feature_data = {'Model': ['Decision Tree','Random Forest','XGBoost'],
+feature_model = {'Model': ['Decision Tree', 'Random Forest', 'XGBoost'],
               'Accuracy': accuracy_scores,
               'ROC_AUC': roc_scores,
               'Cohen_Kappa': coh_scores,
               'Time taken': time_taken}
-data = pd.DataFrame(feature_data)
+s_data = pd.DataFrame(feature_model)
 
-figure, ax1 = plt.subplots(figsize=(14,12))
-ax1.set_title('Model Comparison: Execution Time and Accuracy', fontsize=13)
+figure, axis_x = plt.subplots(figsize=(14, 12))
+axis_x.set_title('Model Comparison: Execution Time and Accuracy', fontsize=13)
 color = 'tab:blue'
-ax1.set_xlabel('Model', fontsize=13)
-ax1.set_ylabel('Time taken', fontsize=13, color=color)
-ax2 = sns.barplot(x='Model', y='Time taken', data = data, palette='summer')
-ax1.tick_params(axis='y')
-ax2 = ax1.twinx()
+axis_x.set_xlabel('Model', fontsize=13)
+axis_x.set_ylabel('Time taken', fontsize=13, color=color)
+axis_y = sns.barplot(x='Model', y='Time taken', data = s_data, palette='summer')
+axis_x.tick_params(axis='y')
+axis_y = axis_x.twinx()
 color = 'tab:red'
-ax2.set_ylabel('Accuracy', fontsize=13, color=color)
-ax2 = sns.lineplot(x='Model', y='Accuracy', data = data, color=color)
-ax2.tick_params(axis='y', color=color)
+axis_y.set_ylabel('Accuracy', fontsize=13, color=color)
+axis_y = sns.lineplot(x='Model', y='Accuracy', data = s_data, color=color)
+axis_y.tick_params(axis='y', color=color)
 
-figure, ax3 = plt.subplots(figsize=(14,12))
-ax3.set_title("Comparing the Area under ROC and Cohen's Kappa models", fontsize=13)
+figure, axis_n = plt.subplots(figsize=(14, 12))
+axis_n.set_title("Comparing the Area under ROC and Cohen's Kappa models", fontsize=13)
 color = 'tab:blue'
-ax3.grid()
-ax3.set_xlabel('Model', fontsize=13)
-ax3.set_ylabel('ROC_AUC', fontsize=13, color=color)
-ax4 = sns.barplot(x='Model', y='ROC_AUC', data = data, palette='winter')
-ax3.tick_params(axis='y')
-ax4 = ax3.twinx()
+axis_n.grid()
+axis_n.set_xlabel('Model', fontsize=13)
+axis_n.set_ylabel('ROC_AUC', fontsize=13, color=color)
+axis_m = sns.barplot(x='Model', y='ROC_AUC', data = s_data, palette='winter')
+axis_n.tick_params(axis='y')
+axis_m = axis_n.twinx()
 color = 'tab:red'
-ax4.set_ylabel('Cohen_Kappa', fontsize=13, color=color)
-ax4 = sns.lineplot(x='Model', y='Cohen_Kappa', data = data, color=color)
-ax4.tick_params(axis='y', color=color)
+axis_m.set_ylabel('Cohen_Kappa', fontsize=13, color=color)
+axis_m = sns.lineplot(x='Model', y='Cohen_Kappa', data = s_data, color=color)
+axis_m.tick_params(axis='y', color=color)
 plt.show()

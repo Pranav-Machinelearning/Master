@@ -6,7 +6,7 @@ from sklearn.utils import resample
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
 import warnings
- from sklearn.experimental import enable_iterative_imputer
+from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn import preprocessing
 from sklearn.feature_selection import SelectKBest, chi2
